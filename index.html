@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>謎解き</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hannari&family=Zen+Kaku+Gothic+New:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #FAFAF9;
+    --glass: rgba(255,255,255,0.55);
+    --glass-border: rgba(255,255,255,0.85);
+    --ink: #2A2A2E;
+    --muted: #9A9AA2;
+    --thread: #6B7A99;
+    --thread-soft: rgba(107,122,153,0.18);
+    --gold: #B9975B;
+    --wrong: #C98B8B;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html,body{
+    margin:0;
+    padding:0;
+    min-height:100vh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    overflow-x:hidden;
+  }
+
+  body{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: 24px;
+    position:relative;
+  }
+
+  /* ambient background: faint crack lines */
+  .ambient-bg{
+    position:fixed;
+    inset:0;
+    z-index:0;
+    pointer-events:none;
+    opacity:0.35;
+  }
+  .ambient-bg svg{ width:100%; height:100%; }
+  .ambient-bg path{
+    stroke: #E4E4E8;
+    stroke-width:1;
+    fill:none;
+  }
+
+  main{
+    position:relative;
+    z-index:1;
+    width:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+
+  .eyebrow{
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    font-size:11px;
+    font-weight:500;
+    letter-spacing:0.35em;
+    color: var(--muted);
+    margin-bottom:22px;
+    text-transform:uppercase;
+  }
+
+  .glass-card{
+    position:relative;
+    width:100%;
+    max-width:540px;
+    border-radius:24px;
+    background: var(--glass);
+    border:1px solid var(--glass-border);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    box-shadow:
+      0 1px 1px rgba(255,255,255,0.6) inset,
+      0 20px 60px -20px rgba(60,60,80,0.18),
+      0 4px 20px -6px rgba(60,60,80,0.10);
+    padding: 32px 40px 32px;
+    overflow:hidden;
+  }
+
+  /* shard overlay used for the "unlock" break animation */
+  .shards{
+    position:absolute;
+    inset:0;
+    z-index:5;
+    pointer-events:none;
+  }
+  .shard{
+    position:absolute;
+    inset:0;
+    background: rgba(255,255,255,0.5);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    transition: transform 900ms cubic-bezier(.22,.61,.36,1), opacity 900ms ease;
+    transform: translate(0,0) rotate(0deg);
+    opacity:1;
+  }
+  .shard:nth-child(1){ clip-path: polygon(0 0, 40% 0, 15% 45%, 0 30%); }
+  .shard:nth-child(2){ clip-path: polygon(40% 0, 100% 0, 100% 25%, 55% 55%, 15% 45%); }
+  .shard:nth-child(3){ clip-path: polygon(100% 25%, 100% 70%, 60% 100%, 40% 60%, 55% 55%); }
+  .shard:nth-child(4){ clip-path: polygon(0 30%, 15% 45%, 40% 60%, 30% 100%, 0 100%); }
+  .shard:nth-child(5){ clip-path: polygon(15% 45%, 55% 55%, 40% 60%, 30% 100%, 60% 100%); }
+  .shard:nth-child(6){ clip-path: polygon(60% 100%, 40% 60%, 100% 70%, 100% 100%); }
+
+  .glass-card.breaking .shard:nth-child(1){ transform: translate(-80px,-60px) rotate(-25deg); opacity:0; transition-delay:0ms; }
+  .glass-card.breaking .shard:nth-child(2){ transform: translate(20px,-100px) rotate(15deg); opacity:0; transition-delay:60ms; }
+  .glass-card.breaking .shard:nth-child(3){ transform: translate(100px,20px) rotate(30deg); opacity:0; transition-delay:120ms; }
+  .glass-card.breaking .shard:nth-child(4){ transform: translate(-90px,40px) rotate(-20deg); opacity:0; transition-delay:90ms; }
+  .glass-card.breaking .shard:nth-child(5){ transform: translate(10px,90px) rotate(10deg); opacity:0; transition-delay:150ms; }
+  .glass-card.breaking .shard:nth-child(6){ transform: translate(70px,90px) rotate(-15deg); opacity:0; transition-delay:180ms; }
+
+  .card-inner{ position:relative; z-index:10; text-align:center; }
+
+  h1{
+    font-family:'Hannari', serif;
+    font-weight:500;
+    font-size: clamp(26px, 5vw, 32px);
+    letter-spacing:0.12em;
+    margin: 0 0 18px;
+    color: var(--ink);
+  }
+
+  .question{
+    position:relative;
+    z-index:2;
+    font-size:17px;
+    line-height:1.9;
+    color: var(--ink);
+    margin: 0 0 26px;
+    white-space:pre-wrap;
+  }
+
+  .puzzle-form{ display:flex; flex-direction:column; align-items:center; gap:26px; margin-top:28px; }
+
+  .digit-group{ display:flex; gap:12px; }
+
+  .digit{
+    position:relative;
+    z-index:2;
+    width:44px;
+    height:58px;
+    text-align:center;
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    font-size:28px;
+    font-weight:600;
+    color: var(--ink);
+    background:transparent;
+    border:none;
+    border-bottom: 3px solid rgba(107,122,153,0.5);
+    border-radius:0;
+    outline:none;
+    transition: border-color 220ms ease, transform 160ms ease;
+  }
+  .digit:focus{
+    border-color: var(--thread);
+  }
+  .digit.wrong{
+    border-color: var(--wrong);
+    animation: shake 420ms ease;
+  }
+  @keyframes shake{
+    10%,90% { transform: translateX(-1px); }
+    20%,80% { transform: translateX(2px); }
+    30%,50%,70% { transform: translateX(-4px); }
+    40%,60% { transform: translateX(4px); }
+  }
+
+  .solve-btn{
+    appearance:none;
+    border:1.5px solid var(--ink);
+    cursor:pointer;
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    font-size:13px;
+    font-weight:700;
+    letter-spacing:0.3em;
+    color: var(--ink);
+    background:transparent;
+    padding:13px 40px;
+    border-radius:999px;
+    transition: transform 160ms ease, background 160ms ease, color 160ms ease;
+  }
+  .solve-btn:hover{ background: var(--ink); color:#fff; transform: translateY(-1px); }
+  .solve-btn:active{ transform: translateY(0px) scale(0.98); }
+
+  .error-msg{
+    min-height:18px;
+    font-size:12px;
+    color: var(--wrong);
+    letter-spacing:0.05em;
+    margin: 14px 0 0;
+  }
+
+  .success-panel{
+    position:relative;
+    z-index:10;
+    text-align:center;
+    opacity:0;
+    transform: translateY(8px);
+    transition: opacity 500ms ease 500ms, transform 500ms ease 500ms;
+  }
+  .success-panel.show{ opacity:1; transform:translateY(0); }
+
+  .success-panel h2{
+    font-family:'Hannari', serif;
+    font-weight:500;
+    font-size: clamp(24px, 5vw, 30px);
+    letter-spacing:0.1em;
+    margin: 4px 0 20px;
+    background: linear-gradient(135deg, var(--gold), #8f7136);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+  .success-image{
+    display:block;
+    width:100%;
+    max-width:220px;
+    aspect-ratio:1/1;
+    object-fit:cover;
+    border-radius:16px;
+    margin:0 auto 22px;
+    box-shadow: 0 12px 30px -10px rgba(60,60,80,0.25);
+    background: linear-gradient(135deg, #F0F0F2, #E4E4E8);
+  }
+  .success-next-btn{
+    display:block;
+    appearance:none;
+    border:none;
+    background:none;
+    cursor:pointer;
+    margin: 22px auto 0;
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    font-size:12px;
+    font-weight:500;
+    letter-spacing:0.25em;
+    color: var(--muted);
+    text-decoration: underline;
+    text-underline-offset:4px;
+  }
+  .success-next-btn:hover{ color: var(--thread); }
+
+  .download-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:10px;
+    text-decoration:none;
+    font-size:13px;
+    font-weight:700;
+    letter-spacing:0.2em;
+    color:#fff;
+    background: linear-gradient(135deg, var(--gold), #8f7136);
+    padding:14px 34px;
+    border-radius:999px;
+    box-shadow: 0 8px 20px -8px rgba(185,151,91,0.6);
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+  .download-btn:hover{ transform: translateY(-1px); box-shadow: 0 10px 24px -8px rgba(185,151,91,0.7); }
+
+  /* confirm modal: 次の亀裂に進む前の確認ダイアログ */
+  .confirm-screen{
+    position:fixed;
+    inset:0;
+    z-index:110;
+    background: rgba(20,20,26,0.32);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    opacity:0;
+    pointer-events:none;
+    transition: opacity 350ms ease;
+  }
+  .confirm-screen.show{
+    opacity:1;
+    pointer-events:auto;
+  }
+  .confirm-box{
+    width:100%;
+    max-width:320px;
+    text-align:center;
+    background: var(--glass);
+    border:1px solid var(--glass-border);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border-radius:20px;
+    padding: 32px 28px;
+    box-shadow:
+      0 1px 1px rgba(255,255,255,0.6) inset,
+      0 20px 60px -20px rgba(60,60,80,0.25);
+    transform: translateY(10px) scale(0.98);
+    transition: transform 350ms ease;
+  }
+  .confirm-screen.show .confirm-box{ transform: translateY(0) scale(1); }
+  .confirm-box p{
+    font-size:14px;
+    line-height:1.8;
+    color: var(--ink);
+    margin: 0 0 26px;
+  }
+  .confirm-actions{
+    display:flex;
+    justify-content:center;
+    gap:12px;
+  }
+  .confirm-btn{
+    appearance:none;
+    border:none;
+    cursor:pointer;
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:0.2em;
+    padding:12px 26px;
+    border-radius:999px;
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+  .confirm-yes{
+    color:#fff;
+    background: linear-gradient(135deg, var(--thread), #4F5C78);
+    box-shadow: 0 8px 20px -8px rgba(107,122,153,0.6);
+  }
+  .confirm-yes:hover{ transform: translateY(-1px); }
+  .confirm-no{
+    color: var(--muted);
+    background: rgba(154,154,162,0.12);
+  }
+  .confirm-no:hover{ color: var(--ink); }
+
+  @media (prefers-reduced-motion: reduce){
+    .digit, .solve-btn, .download-btn, .shard, .success-panel, .confirm-screen, .confirm-box{ transition:none !important; animation:none !important; }
+  }
+
+  @media (max-width:420px){
+    .glass-card{ padding: 36px 20px 32px; }
+    .digit{ width:42px; height:54px; font-size:20px; }
+    .digit-group{ gap:8px; }
+  }
+
+  /* welcome screen: shown first, before the puzzle */
+  .welcome-screen{
+    position:fixed;
+    inset:0;
+    z-index:100;
+    background:#FFFFFF;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    cursor:pointer;
+    transition: opacity 700ms ease;
+  }
+  .welcome-screen.hide{
+    opacity:0;
+    pointer-events:none;
+  }
+  .welcome-meter{
+    position:relative;
+    width: min(280px, 68vw);
+    height:64px;
+    opacity:0;
+    transform: translateY(6px);
+    transition: opacity 900ms ease, transform 900ms ease;
+  }
+  .welcome-meter.in{
+    opacity:1;
+    transform:translateY(0);
+  }
+  .meter-crack{
+    display:block;
+    width:100%;
+    height:100%;
+  }
+  .meter-crack path{
+    fill:none;
+    stroke:#000000;
+    stroke-width:2;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+  }
+  .meter-bar{
+    position:absolute;
+    top:0;
+    left:0;
+    width:3px;
+    height:16px;
+    background:#000000;
+    border-radius:2px;
+    offset-path: path('M0,42 L32,12 L58,52 L90,20 L118,56 L150,16 L180,48 L210,24 L238,50 L280,30');
+    offset-rotate: 0deg;
+    offset-distance: 0%;
+    animation: meterMove 2.6s linear infinite;
+  }
+  @keyframes meterMove{
+    0%{ offset-distance: 0%; }
+    100%{ offset-distance: 100%; }
+  }
+  .welcome-hint{
+    position:absolute;
+    bottom:56px;
+    left:50%;
+    transform: translateX(-50%);
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    font-size:11px;
+    letter-spacing:0.3em;
+    color: var(--muted);
+    opacity:0;
+    transition: opacity 900ms ease 300ms;
+  }
+  .welcome-hint.in{ opacity:1; }
+
+  @media (prefers-reduced-motion: reduce){
+    .welcome-screen, .welcome-meter{ transition:none !important; }
+    .meter-bar{ animation:none !important; offset-distance:0%; }
+  }
+
+  /* explanation screen: shown after "ようこそ", before the puzzle */
+  .explain-screen{
+    position:fixed;
+    inset:0;
+    z-index:90;
+    background:#FFFFFF;
+    opacity:0;
+    pointer-events:none;
+    transition: opacity 700ms ease;
+    cursor:pointer;
+    overflow:hidden;
+  }
+  .explain-screen.show{
+    opacity:1;
+    pointer-events:auto;
+  }
+  .explain-screen.hide{
+    opacity:0;
+    pointer-events:none;
+  }
+  .explain-title{
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform: translate(-50%, -50%);
+    width:100%;
+    padding:0 24px;
+    text-align:center;
+    transition: top 600ms cubic-bezier(.22,.61,.36,1), transform 600ms cubic-bezier(.22,.61,.36,1);
+  }
+  .explain-title.top{
+    top:64px;
+    transform: translate(-50%, 0);
+  }
+  .explain-title h2{
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    font-weight:700;
+    font-size: clamp(22px, 5vw, 26px);
+    letter-spacing:0.2em;
+    color: var(--ink);
+    margin:0;
+  }
+  .explain-body{
+    position:absolute;
+    left:50%;
+    top:148px;
+    transform: translateX(-50%);
+    width:100%;
+    max-width:420px;
+    max-height: calc(100vh - 200px);
+    overflow-y:auto;
+    padding:0 24px;
+    text-align:center;
+    opacity:0;
+    transition: opacity 500ms ease 250ms;
+  }
+  .explain-body.show{
+    opacity:1;
+  }
+  .explain-paragraphs p{
+    font-size:14px;
+    line-height:2;
+    color:#5C5C64;
+    white-space:pre-wrap;
+    margin:0 0 22px;
+    opacity:0;
+    transform: translateY(6px);
+    transition: opacity 500ms ease, transform 500ms ease;
+  }
+  .explain-paragraphs p.in{
+    opacity:1;
+    transform:translateY(0);
+  }
+  .explain-hint{
+    margin-top:8px;
+    font-size:11px;
+    letter-spacing:0.3em;
+    color: var(--muted);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .explain-screen, .explain-title{ transition:none !important; }
+  }
+
+  /* dialogue screen: シリフ(visual novel style), tap to advance */
+  .dialogue-screen{
+    position:fixed;
+    inset:0;
+    z-index:95;
+    background:#FFFFFF;
+    display:flex;
+    align-items:flex-end;
+    justify-content:center;
+    padding: 24px;
+    padding-bottom: 64px;
+    opacity:0;
+    pointer-events:none;
+    transition: opacity 700ms ease;
+    cursor:pointer;
+  }
+  .dialogue-screen.show{ opacity:1; pointer-events:auto; }
+  .dialogue-screen.hide{ opacity:0; pointer-events:none; }
+
+  .dialogue-box{
+    width:100%;
+    max-width:600px;
+    height:190px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    overflow:hidden;
+    text-align:left;
+    background: var(--glass);
+    border:1px solid var(--glass-border);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border-radius:20px;
+    padding: 28px 30px 24px;
+    box-shadow:
+      0 1px 1px rgba(255,255,255,0.6) inset,
+      0 20px 60px -20px rgba(60,60,80,0.18);
+    opacity:0;
+    transform: translateY(8px);
+    transition: opacity 380ms ease, transform 380ms ease;
+  }
+  .dialogue-box.in{ opacity:1; transform: translateY(0); }
+
+  .dialogue-speaker{
+    font-family:'Hannari', serif;
+    font-weight:600;
+    font-size:14px;
+    letter-spacing:0.15em;
+    color: var(--thread);
+    margin-bottom:12px;
+  }
+  .dialogue-text{
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    font-size:15px;
+    line-height:1.9;
+    color: var(--ink);
+    white-space:pre-wrap;
+  }
+  .dialogue-hint{
+    margin-top:18px;
+    text-align:right;
+    font-size:11px;
+    letter-spacing:0.2em;
+    color: var(--muted);
+  }
+
+  /* system-type lines: no speaker, centered, monospace feel */
+  .dialogue-box.system .dialogue-speaker{ display:none; }
+  .dialogue-box.system .dialogue-text{
+    text-align:center;
+    font-family: 'Courier New', monospace;
+    font-size:13px;
+    letter-spacing:0.2em;
+    color: var(--muted);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .dialogue-screen, .dialogue-box{ transition:none !important; }
+  }
+
+  /* curtain: ようこそ〜あそびかたの間、ずっと白で覆っておき、
+     画面切り替えの隙間から謎解きページが一瞬見えるのを防ぐ */
+  .curtain{
+    position:fixed;
+    inset:0;
+    z-index:80;
+    background:#FFFFFF;
+    opacity:1;
+    pointer-events:none;
+    transition: opacity 700ms ease;
+  }
+  .curtain.hide{ opacity:0; }
+
+  @media (prefers-reduced-motion: reduce){
+    .curtain{ transition:none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="welcome-screen" id="welcomeScreen">
+  <div class="welcome-meter" id="welcomeMeter">
+    <svg class="meter-crack" viewBox="0 0 280 64" preserveAspectRatio="none">
+      <path d="M0,42 L32,12 L58,52 L90,20 L118,56 L150,16 L180,48 L210,24 L238,50 L280,30" />
+    </svg>
+  </div>
+  <div class="welcome-hint" id="welcomeHint">タップしてはじめる</div>
+</div>
+
+<div class="dialogue-screen" id="dialogueScreen">
+  <div class="dialogue-box" id="dialogueBox">
+    <div class="dialogue-speaker" id="dialogueSpeaker"></div>
+    <div class="dialogue-text" id="dialogueText"></div>
+    <div class="dialogue-hint">タップして次へ</div>
+  </div>
+</div>
+
+<div class="explain-screen" id="explainScreen">
+  <div class="explain-title" id="explainTitleWrap">
+    <h2 id="explainTitle">あそびかた</h2>
+  </div>
+  <div class="explain-body" id="explainBody">
+    <div class="explain-paragraphs" id="explainParagraphs"></div>
+    <div class="explain-hint">タップして次へ</div>
+  </div>
+</div>
+
+<div class="curtain" id="curtain"></div>
+
+<div class="ambient-bg">
+  <svg viewBox="0 0 800 800" preserveAspectRatio="none">
+    <path d="M0,120 L220,180 L180,340 L420,300 L520,520 L800,460"/>
+    <path d="M0,600 L260,560 L340,700 L600,650 L800,720"/>
+    <path d="M120,0 L160,260 L60,400 L200,800"/>
+    <path d="M700,0 L620,220 L780,340 L680,800"/>
+  </svg>
+</div>
+
+<main>
+  <div class="glass-card" id="card">
+    <div class="shards" id="shards">
+      <div class="shard"></div><div class="shard"></div><div class="shard"></div>
+      <div class="shard"></div><div class="shard"></div><div class="shard"></div>
+    </div>
+
+    <div class="card-inner" id="cardInner">
+      <p class="question" id="question"></p>
+
+      <form class="puzzle-form" id="puzzleForm" autocomplete="off">
+        <div class="digit-group">
+          <input class="digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="0" aria-label="1桁目">
+          <input class="digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="1" aria-label="2桁目">
+          <input class="digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="2" aria-label="3桁目">
+          <input class="digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="3" aria-label="4桁目">
+        </div>
+        <button type="submit" class="solve-btn">ENTER</button>
+        <p class="error-msg" id="errorMsg" aria-live="polite"></p>
+      </form>
+    </div>
+
+    <div class="success-panel" id="successPanel">
+      <img class="success-image" id="successImage" alt="" hidden>
+      <h2 id="successHeading"></h2>
+      <a class="download-btn" id="downloadBtn" href="#">ダウンロードする</a>
+      <button type="button" class="success-next-btn" id="successNextBtn">次へ</button>
+    </div>
+  </div>
+</main>
+
+<div class="confirm-screen" id="confirmScreen">
+  <div class="confirm-box">
+    <p id="confirmText"></p>
+    <div class="confirm-actions">
+      <button type="button" class="confirm-btn confirm-yes" id="confirmYesBtn">はい</button>
+      <button type="button" class="confirm-btn confirm-no" id="confirmNoBtn">いいえ</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ============================================================
+     設定はここだけ変更すれば反映されます
+  ============================================================ */
+  const CONFIG = {
+    // 謎(亀裂)を配列で管理します。1つずつ増やしたり内容を変更したりできます。
+    // password: 4桁の正解パスワード
+    // question: 問題文(改行は \n で入れられます)
+    // image: 正解時に表示する画像のURL(未設定の場合は仮の枠が表示されます)
+    // downloadFileURL / downloadFileName: 正解後にダウンロードさせるファイル
+    puzzles: [
+      {
+        password: "0003",
+        question: "修復すべき亀裂を数える",
+        image: "puzzle1-image.jpg",
+        downloadFileURL: "Shore_in_the_Rain.mcz",
+        downloadFileName: "Shore_in_the_Rain.mcz",
+      },
+      {
+        password: "1111",
+        question: "2つ目の亀裂の謎をここに入力してください。\n4桁の数字を解き明かしてください。",
+        image: "",
+        downloadFileURL: "",
+        downloadFileName: "song2.mp3",
+      },
+      {
+        password: "2222",
+        question: "3つ目の亀裂の謎をここに入力してください。\n4桁の数字を解き明かしてください。",
+        image: "",
+        downloadFileURL: "",
+        downloadFileName: "song3.mp3",
+      },
+    ],
+
+    // 正解時に表示する見出し(固定文言)
+    successHeading: "New Song Released",
+
+    // 次の亀裂へ進む前に表示する確認メッセージ
+    confirmText: "次の亀裂を修復しますか？",
+
+    // 「ようこそ」の後に表示するセリフ(タップで1行ずつ進みます)
+    // type: "system" にすると、話者名なしのシステムメッセージとして表示されます
+    dialogue: [
+      { type: "system", text: "［SYSTEM BOOT…］" },
+      { type: "system", text: "［STATUS ： ONLINE］" },
+      { speaker: "???", text: "――接続を確認。" },
+      { speaker: "???", text: "ようこそ、新規領域《Niveus》へ。" },
+      { speaker: "???", text: "当システムは、当該空間の管理・維持を目的として設計された自立管理システム―《Fuyu》です。" },
+      { speaker: "Fuyu", text: "長期にわたる観測の結果、Niveus内部に異常現象を検知。" },
+      { speaker: "Fuyu", text: "空間構造に複数の亀裂を確認。損傷範囲は継続的に拡大しています。" },
+      { speaker: "Fuyu", text: "Niveus修復を目的とし、外部協力者の接続を要請します。" },
+    ],
+
+    // 「ようこそ」の後に表示するゲーム説明(改行は \n で入れられます)
+    explanationTitle: "あそびかた",
+    // 1回タップするごとに、上から1段落ずつ書き足されて表示されます
+    explanationParagraphs: [
+      "楽曲をプレイすることでNiveus内部の亀裂を修復することができます。\n修復すべき亀裂は全部で３ヶ所です。",
+      "いくつかの楽曲には、複数の難易度が設定されています。どちらでプレイしても亀裂は修復できます。\nPRISM　　　  （Lv.5～Lv.15）\nREFRACTION（Lv.16～Lv.25）",
+      "楽曲をプレイするためには、謎を解き、４桁の数字を入力する必要があります。\nただし、３桁以下の数字を入力する際は、先頭に０を付けて入力してください。例：111 ⇀ 0111",
+    ],
+  };
+  /* ============================================================ */
+
+  /* welcome screen: fade meter in, dismiss only on click / tap */
+  const welcomeScreen = document.getElementById("welcomeScreen");
+  const welcomeMeter = document.getElementById("welcomeMeter");
+  const welcomeHint = document.getElementById("welcomeHint");
+
+  requestAnimationFrame(() => {
+    welcomeMeter.classList.add("in");
+    welcomeHint.classList.add("in");
+  });
+
+  const explainScreen = document.getElementById("explainScreen");
+  document.getElementById("explainTitle").textContent = CONFIG.explanationTitle;
+
+  const dialogueScreen = document.getElementById("dialogueScreen");
+  const dialogueBox = document.getElementById("dialogueBox");
+  const dialogueSpeaker = document.getElementById("dialogueSpeaker");
+  const dialogueText = document.getElementById("dialogueText");
+  let dialogueIndex = 0;
+
+  const showDialogueLine = (i) => {
+    const line = CONFIG.dialogue[i];
+    dialogueBox.classList.remove("in");
+    void dialogueBox.offsetWidth; // 再描画させてフェードをやり直す
+    if (line.type === "system") {
+      dialogueBox.classList.add("system");
+      dialogueSpeaker.textContent = "";
+    } else {
+      dialogueBox.classList.remove("system");
+      dialogueSpeaker.textContent = line.speaker;
+    }
+    dialogueText.textContent = line.text;
+    requestAnimationFrame(() => dialogueBox.classList.add("in"));
+  };
+
+  const startDialogue = () => {
+    dialogueIndex = 0;
+    dialogueScreen.classList.add("show");
+    showDialogueLine(dialogueIndex);
+  };
+
+  dialogueScreen.addEventListener("click", () => {
+    dialogueIndex++;
+    if (dialogueIndex < CONFIG.dialogue.length) {
+      showDialogueLine(dialogueIndex);
+    } else {
+      dialogueScreen.classList.remove("show");
+      dialogueScreen.classList.add("hide");
+      setTimeout(() => explainScreen.classList.add("show"), 700);
+    }
+  });
+
+  const dismissWelcome = () => {
+    welcomeScreen.classList.add("hide");
+    welcomeScreen.removeEventListener("click", dismissWelcome);
+    // ようこそ画面が消えたら、セリフ画面を表示する
+    setTimeout(startDialogue, 700);
+  };
+  welcomeScreen.addEventListener("click", dismissWelcome);
+
+  const curtain = document.getElementById("curtain");
+  const explainTitleWrap = document.getElementById("explainTitleWrap");
+  const explainBody = document.getElementById("explainBody");
+  const explainParagraphs = document.getElementById("explainParagraphs");
+  let explainStage = 0;
+
+  const appendExplainParagraph = (text) => {
+    const p = document.createElement("p");
+    p.textContent = text;
+    explainParagraphs.appendChild(p);
+    requestAnimationFrame(() => p.classList.add("in"));
+  };
+
+  explainScreen.addEventListener("click", () => {
+    if (explainStage === 0) {
+      // 1回目のタップ:タイトルを上部へスライドし、説明文の表示エリアを開く
+      explainTitleWrap.classList.add("top");
+      explainBody.classList.add("show");
+    }
+    if (explainStage < CONFIG.explanationParagraphs.length) {
+      // 段落を1つずつ、上から書き足していく
+      appendExplainParagraph(CONFIG.explanationParagraphs[explainStage]);
+      explainStage++;
+    } else {
+      // 全段落を表示し終えたら、謎解き画面へ進む
+      explainScreen.classList.remove("show");
+      explainScreen.classList.add("hide");
+      curtain.classList.add("hide");
+    }
+  });
+
+  const digits = Array.from(document.querySelectorAll(".digit"));
+  const form = document.getElementById("puzzleForm");
+  const errorMsg = document.getElementById("errorMsg");
+  const card = document.getElementById("card");
+  const shards = document.getElementById("shards");
+  const cardInner = document.getElementById("cardInner");
+  const questionEl = document.getElementById("question");
+  const successPanel = document.getElementById("successPanel");
+  const successImage = document.getElementById("successImage");
+  const successHeading = document.getElementById("successHeading");
+  const successNextBtn = document.getElementById("successNextBtn");
+  const downloadBtn = document.getElementById("downloadBtn");
+  const confirmScreen = document.getElementById("confirmScreen");
+  const confirmYesBtn = document.getElementById("confirmYesBtn");
+  const confirmNoBtn = document.getElementById("confirmNoBtn");
+
+  document.getElementById("confirmText").textContent = CONFIG.confirmText;
+  successHeading.textContent = CONFIG.successHeading;
+
+  let currentPuzzleIndex = 0;
+
+  // 現在の謎(亀裂)の問題文を表示し、入力欄をリセットする
+  const loadPuzzle = (index) => {
+    const puzzle = CONFIG.puzzles[index];
+    questionEl.textContent = puzzle.question;
+    errorMsg.textContent = "";
+    digits.forEach(d => (d.value = ""));
+    digits[0].focus();
+  };
+
+  // 正解時のダウンロードリンクを、現在の謎の設定に合わせてつなぎ直す
+  let downloadHandler = null;
+  const setupDownload = (puzzle) => {
+    if (downloadHandler) {
+      downloadBtn.removeEventListener("click", downloadHandler);
+      downloadHandler = null;
+    }
+    if (puzzle.downloadFileURL) {
+      downloadBtn.href = puzzle.downloadFileURL;
+      downloadBtn.setAttribute("download", puzzle.downloadFileName || "");
+    } else {
+      downloadBtn.href = "#";
+      downloadBtn.removeAttribute("download");
+      downloadHandler = (e) => {
+        e.preventDefault();
+        alert("ダウンロードファイルがまだ設定されていません。CONFIG.puzzles の downloadFileURL を設定してください。");
+      };
+      downloadBtn.addEventListener("click", downloadHandler);
+    }
+  };
+
+  // 正解時の画像を表示する(未設定なら空の枠のまま)
+  const setupSuccessImage = (puzzle) => {
+    if (puzzle.image) {
+      successImage.src = puzzle.image;
+      successImage.hidden = false;
+    } else {
+      successImage.removeAttribute("src");
+      successImage.hidden = true;
+    }
+  };
+
+  loadPuzzle(currentPuzzleIndex);
+
+  digits.forEach((input, i) => {
+    input.addEventListener("input", () => {
+      input.value = input.value.replace(/[^0-9]/g, "");
+      input.classList.remove("wrong");
+      if (input.value && i < digits.length - 1) {
+        digits[i + 1].focus();
+      }
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Backspace" && !input.value && i > 0) {
+        digits[i - 1].focus();
+      }
+    });
+  });
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const entered = digits.map(d => d.value).join("");
+    const puzzle = CONFIG.puzzles[currentPuzzleIndex];
+
+    if (entered.length < 4) {
+      errorMsg.textContent = "4桁すべて入力してください。";
+      return;
+    }
+
+    if (entered === puzzle.password) {
+      errorMsg.textContent = "";
+      setupSuccessImage(puzzle);
+      setupDownload(puzzle);
+      // 最後の謎の場合は「次へ」ボタンを隠す(次の亀裂がないため)
+      successNextBtn.hidden = currentPuzzleIndex >= CONFIG.puzzles.length - 1;
+      card.classList.add("breaking");
+      setTimeout(() => {
+        cardInner.style.display = "none";
+        successPanel.classList.add("show");
+      }, 350);
+    } else {
+      errorMsg.textContent = "違うようです。もう一度。";
+      digits.forEach(d => d.classList.add("wrong"));
+      setTimeout(() => digits.forEach(d => d.classList.remove("wrong")), 450);
+      digits.forEach(d => d.value = "");
+      digits[0].focus();
+    }
+  });
+
+  // 「次へ」→ 次の亀裂に進む前に確認ダイアログを表示
+  successNextBtn.addEventListener("click", () => {
+    confirmScreen.classList.add("show");
+  });
+
+  confirmNoBtn.addEventListener("click", () => {
+    confirmScreen.classList.remove("show");
+  });
+
+  confirmYesBtn.addEventListener("click", () => {
+    confirmScreen.classList.remove("show");
+    successPanel.classList.remove("show");
+    setTimeout(() => {
+      currentPuzzleIndex++;
+      card.classList.remove("breaking");
+      cardInner.style.display = "";
+      loadPuzzle(currentPuzzleIndex);
+    }, 550);
+  });
+</script>
+
+</body>
+</html>
